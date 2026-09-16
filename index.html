@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Exam Series & Answer Matcher | परीक्षा उत्तर व सीरीज मिलान</title>
+  <link rel="stylesheet" href="style.css?v=2" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📝</text></svg>">
+</head>
+<body>
+
+<!-- ═══ Header ═══ -->
+<header class="header">
+  <h1>📝 Exam Series & Answer Matcher</h1>
+  <p>अपना पेपर (Series A), दोस्त/मास्टर पेपर (Series B/C/D) और Answer Key को ऑटोमैटिकली मिलाएं!</p>
+</header>
+
+<!-- ═══ Step Indicator ═══ -->
+<div class="steps-bar">
+  <div class="step-item active" id="step-indicator-1">
+    <div class="step-bubble">1</div>
+    <div class="step-label">PDF Upload करें</div>
+  </div>
+  <div class="step-item" id="step-indicator-2">
+    <div class="step-bubble">2</div>
+    <div class="step-label">सीरीज मिलान सारणी</div>
+  </div>
+</div>
+
+<!-- ═══ Global Loader ═══ -->
+<div class="container">
+  <div class="loader" id="global-loader">
+    <div class="spinner"></div>
+    <p>AI दोनों प्रश्न पत्रों को पढ़कर उनके प्रश्नों को पहचान रहा है…<br>
+       <small>(कृपया कुछ सेकंड प्रतीक्षा करें...)</small></p>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     STEP 1 — Upload
+     ══════════════════════════════════════════════════ -->
+<div class="container" id="step-upload">
+
+  <div class="card">
+    <h2><span>📤</span> दोनों Question Paper और Answer Key Upload करें</h2>
+
+    <div class="alert alert-info">
+      💡 <strong>कैसे काम करता है:</strong>
+      अगर आपका <strong>Series A</strong> है और दोस्त/मास्टर पेपर <strong>Series D</strong> है, तो दोनों PDF यहाँ अपलोड करें। AI दोनों पेपर्स के प्रश्नों को पढ़कर <strong>Series A के हर प्रश्न को Series D के सही प्रश्न नंबर</strong> से अपने-आप मिलाकर एक साफ <strong>सारणी (Table)</strong> बना देगा!
+    </div>
+
+    <div class="upload-grid-3">
+      <!-- Paper A -->
+      <div>
+        <label class="box-title">
+          📄 आपका Paper (जैसे: Series A) <span class="req">*जरूरी</span>
+        </label>
+        <div class="upload-zone" id="paper-a-zone">
+          <input type="file" id="paper-a-input" accept=".pdf,.jpg,.jpeg,.png" />
+          <div class="upload-icon">📄</div>
+          <div class="upload-label">अपना Question Paper Upload करें</div>
+          <div class="upload-hint">PDF या Image (Series A)</div>
+          <div class="file-name"></div>
+        </div>
+      </div>
+
+      <!-- Paper B (Friend / Master) -->
+      <div>
+        <label class="box-title">
+          👥 दोस्त / Master Paper (जैसे: Series D) <span class="opt">(वैकल्पिक)</span>
+        </label>
+        <div class="upload-zone" id="paper-b-zone">
+          <input type="file" id="paper-b-input" accept=".pdf,.jpg,.jpeg,.png" />
+          <div class="upload-icon">📑</div>
+          <div class="upload-label">दोस्त / Master Paper Upload करें</div>
+          <div class="upload-hint">PDF या Image (Series B/C/D)</div>
+          <div class="file-name"></div>
+        </div>
+      </div>
+
+      <!-- Answer Key -->
+      <div>
+        <label class="box-title">
+          🗝️ Official Answer Key <span class="opt">(वैकल्पिक)</span>
+        </label>
+        <div class="upload-zone" id="key-zone">
+          <input type="file" id="key-input" accept=".pdf,.jpg,.jpeg,.png" />
+          <div class="upload-icon">🗝️</div>
+          <div class="upload-label">Official Answer Key Upload करें</div>
+          <div class="upload-hint">PDF या Image (ans.pdf)</div>
+          <div class="file-name"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Marking Scheme -->
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+      <p style="font-weight:600;font-size:.9rem;margin-bottom:12px;">⚙️ Marking Scheme (अंक योजना)</p>
+      <div class="settings-row">
+        <div class="setting-group">
+          <label for="marks-per-q">✅ प्रति सही उत्तर (Marks)</label>
+          <input type="number" id="marks-per-q" value="1" min="0.25" step="0.25" />
+        </div>
+        <div class="setting-group">
+          <label for="neg-marking">❌ Negative Marking (प्रति गलत उत्तर)</label>
+          <input type="number" id="neg-marking" value="0.33" min="0" step="0.01" />
+        </div>
+      </div>
+    </div>
+
+    <div id="upload-error" style="margin-top:14px"></div>
+
+    <button class="btn btn-primary btn-full mt-16" id="match-btn">
+      🚀 पेपर्स को Match करें और सारणी देखें
+    </button>
+  </div>
+
+</div><!-- /step-upload -->
+
+<!-- ══════════════════════════════════════════════════
+     STEP 2 — Results Table (सारणी)
+     ══════════════════════════════════════════════════ -->
+<div class="container" id="step-results" style="display:none;">
+
+  <div class="card">
+    <div class="results-toolbar">
+      <div>
+        <h2 style="margin-bottom:4px"><span>📊</span> Question Paper & Series Match सारणी</h2>
+        <p style="font-size:.85rem;color:var(--text-muted)" id="summary-badge">कुल प्रश्न: 0</p>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline" id="print-btn" style="padding:8px 14px;font-size:.85rem">
+          🖨️ Print सारणी
+        </button>
+        <button class="btn btn-primary" id="restart-btn" style="padding:8px 14px;font-size:.85rem">
+          🔄 नया Paper
+        </button>
+      </div>
+    </div>
+
+    <div class="alert alert-success" id="matched-status-alert">
+      ✅ AI ने दोनों सीरीज के प्रश्नों को पहचानकर मिला दिया है। नीचे दी गई सारणी में आपके पेपर (Series A) और दोस्त के पेपर (Series D) के प्रश्न नंबर का मिलान देखें।
+    </div>
+
+    <div class="table-wrapper">
+      <table id="main-results-table">
+        <thead>
+          <tr>
+            <th style="width:100px;">आपका प्रश्न<br>(Series A)</th>
+            <th>प्रश्न (Question Text - Hindi &amp; English)</th>
+            <th style="width:130px;">दोस्त का प्रश्न<br>(Series D / Master)</th>
+            <th style="width:100px;">सही उत्तर<br>(Answer Key)</th>
+          </tr>
+        </thead>
+        <tbody id="results-table-body">
+          <!-- Populated by JS -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /step-results -->
+
+<script src="app.js?v=2"></script>
+</body>
+</html>
