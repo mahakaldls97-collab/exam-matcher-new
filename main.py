@@ -1,5 +1,6 @@
 import os
 import sys
+import traceback
 from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
@@ -10,13 +11,11 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-# Ensure imports work whether run from root or backend
 CURRENT_DIR = Path(__file__).parent.resolve()
 sys.path.insert(0, str(CURRENT_DIR))
 
 from extractor import extract_all_questions, extract_text_from_pdf
 from matcher import match_questions, match_two_series
-from scorer import calculate_score
 
 load_dotenv()
 
@@ -40,7 +39,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# FRONTEND DIRECTORY - works whether files are in root or frontend folder
 if (CURRENT_DIR / "frontend").exists():
     FRONTEND_DIR = CURRENT_DIR / "frontend"
 else:
@@ -54,56 +52,65 @@ def health_check():
 async def match_series_endpoint(
     paper_a: UploadFile = File(...),
     paper_b: UploadFile = File(None),
-    answer_key: UploadFile = File(...)
+    answer_key: UploadFile = File(None)
 ):
     try:
         bytes_a = await paper_a.read()
-        bytes_key = await answer_key.read()
+        if not bytes_a:
+            raise HTTPException(status_code=400, detail="Paper A cannot be empty.")
 
-        if not bytes_a or not bytes_key:
-            raise HTTPException(status_code=400, detail="Paper A and Answer Key cannot be empty.")
-
+        print("Extracting Paper A...")
         questions_a = extract_all_questions(bytes_a)
         if not questions_a:
             raise HTTPException(status_code=400, detail="Could not extract questions from Paper A.")
 
-        key_text = extract_text_from_pdf(bytes_key)
-        if not key_text:
-            raise HTTPException(status_code=400, detail="Could not extract text from Answer Key.")
+        key_map = {}
+        if answer_key and answer_key.filename:
+            bytes_key = await answer_key.read()
+            if bytes_key:
+                print("Extracting Answer Key...")
+                key_text = extract_text_from_pdf(bytes_key)
+                if key_text:
+                    key_map = match_questions(questions_a, key_text)
 
-        key_mapping = match_questions(questions_a, key_text)
-
-        if paper_b:
+        questions_b = []
+        if paper_b and paper_b.filename:
             bytes_b = await paper_b.read()
             if bytes_b:
+                print("Extracting Paper B...")
                 questions_b = extract_all_questions(bytes_b)
-                if questions_b:
-                    series_results = match_two_series(questions_a, questions_b, key_mapping)
-                    return JSONResponse(content={
-                        "mode": "two_series",
-                        "results": series_results
-                    })
 
-        single_results = []
-        for q in questions_a:
-            q_num = q.get("question_number")
-            correct_ans = key_mapping.get(str(q_num), key_mapping.get(q_num, ""))
-            single_results.append({
-                "series_a_num": q_num,
-                "question_text": q.get("question_text", ""),
-                "options": q.get("options", {}),
-                "correct_answer": correct_ans
-            })
+        if questions_b:
+            print("Matching two series...")
+            matched_table = match_two_series(questions_a, questions_b, key_map)
+            # If match_two_series is async/coroutine, await it
+            if hasattr(matched_table, "__await__"):
+                matched_table = await matched_table
+        else:
+            matched_table = []
+            for q in questions_a:
+                qno = str(q.get("question_number", q.get("q_no", "")))
+                matched_table.append({
+                    "series_a_q_no": qno,
+                    "question": q.get("question_text", q.get("question", "")),
+                    "options": q.get("options", {}),
+                    "series_b_q_no": qno,
+                    "correct_answer": key_map.get(qno, "?"),
+                    "matched_by": "direct"
+                })
 
-        return JSONResponse(content={
-            "mode": "single_series",
-            "results": single_results
-        })
+        return {
+            "success": True,
+            "total_questions": len(matched_table),
+            "matched_table": matched_table,
+            "questions_a": questions_a,
+            "questions_b_count": len(questions_b),
+            "has_key": bool(key_map)
+        }
 
     except Exception as e:
-        print(f"Error in match_series_endpoint: {e}")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-# Mount frontend files at root
 if FRONTEND_DIR.exists():
     app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
