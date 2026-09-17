@@ -1,169 +1,60 @@
-﻿/* ═══════════════════════════════════════════════════════
-   Exam Series & Answer Matcher — Frontend Logic
+/* ═══════════════════════════════════════════════════════
+   Exam Series & Answer Matcher — Frontend Controller
    ═══════════════════════════════════════════════════════ */
 
-const API = "";
+let fileA = null;
+let fileB = null;
+let fileKey = null;
 
-let paperAFile = null;
-let paperBFile = null;
-let keyFile    = null;
+const $ = (id) => document.getElementById(id);
 
-const $  = (sel, ctx = document) => ctx.querySelector(sel);
-const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
+// Bind file inputs and drag-and-drop
+function setupBox(dropZoneId, inputId, infoId, onSelect) {
+  const dropZone = $(dropZoneId);
+  const input = $(inputId);
+  const info = $(infoId);
 
-function showAlert(container, type, html) {
-  container.innerHTML = `<div class="alert alert-${type}">${html}</div>`;
-}
+  if (!dropZone || !input) return;
 
-function setLoaderMessage(html) {
-  const p = $("#global-loader p");
-  if (p) p.innerHTML = html;
-}
+  dropZone.addEventListener("click", () => input.click());
 
-function setupUploadZone(zoneId, inputId, onFile) {
-  const zone  = $(`#${zoneId}`);
-  const input = $(`#${inputId}`);
-  if (!zone || !input) return;
-
-  input.addEventListener("change", () => {
-    if (input.files[0]) onFile(input.files[0]);
-  });
-
-  zone.addEventListener("dragover",  e => { e.preventDefault(); zone.classList.add("drag-over"); });
-  zone.addEventListener("dragleave", ()  => zone.classList.remove("drag-over"));
-  zone.addEventListener("drop", e => {
-    e.preventDefault();
-    zone.classList.remove("drag-over");
-    const f = e.dataTransfer.files[0];
-    if (f) { input.files = e.dataTransfer.files; onFile(f); }
-  });
-}
-
-function markZoneFile(zoneId, file) {
-  const zone = $(`#${zoneId}`);
-  if (!zone) return;
-  zone.classList.add("has-file");
-  const icon   = zone.querySelector(".upload-icon");
-  const label  = zone.querySelector(".upload-label");
-  const name   = zone.querySelector(".file-name") || (() => {
-    const el = document.createElement("div");
-    el.className = "file-name";
-    zone.appendChild(el);
-    return el;
-  })();
-  if (icon)  icon.textContent  = "✅";
-  if (label) label.textContent = "File selected!";
-  name.textContent = file.name;
-}
-
-async function matchSeries() {
-  if (!paperAFile) {
-    return showAlert($("#upload-error"), "error", "⚠️ कृपया कम से कम अपना Question Paper (Series A) ज़रूर अपलोड करें।");
-  }
-
-  $("#upload-error").innerHTML = "";
-  $("#match-btn").disabled = true;
-  setLoaderMessage("📄 Document पढ़ा जा रहा है...<br><small>AI मॉडल पेपर्स को स्कैन कर रहा है...</small>");
-  $("#global-loader").classList.add("show");
-
-  let seconds = 0;
-  const timer = setInterval(() => {
-    seconds += 2;
-    if (seconds === 4) {
-      setLoaderMessage("🔍 दोनों पेपर्स के प्रश्नों को हिंदी और अंग्रेजी में पढ़ा जा रहा है...<br><small>कृपया प्रतीक्षा करें...</small>");
-    } else if (seconds === 12) {
-      setLoaderMessage("🤖 Series A और Series D के प्रश्नों का मिलान (Question Matching) हो रहा है...<br><small>बस थोड़ी ही देर और...</small>");
-    } else if (seconds >= 24) {
-      setLoaderMessage(`⏳ बड़ी फ़ाइल प्रोसेस हो रही है (${seconds}s)...<br><small>सारणी तैयार की जा रही है...</small>`);
+  input.addEventListener("change", (e) => {
+    if (e.target.files && e.target.files[0]) {
+      handleFile(e.target.files[0], dropZone, info, onSelect);
     }
-  }, 2000);
+  });
 
-  try {
-    const form = new FormData();
-    form.append("paper_a", paperAFile);
-    if (paperBFile) form.append("paper_b", paperBFile);
-    if (keyFile)    form.append("answer_key", keyFile);
+  dropZone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    dropZone.classList.add("drag-over");
+  });
 
-    const resp = await fetch(`${API}/api/match-series`, { method: "POST", body: form });
-    const data = await resp.json();
+  dropZone.addEventListener("dragleave", () => {
+    dropZone.classList.remove("drag-over");
+  });
 
-    clearInterval(timer);
-    if (!resp.ok) throw new Error(data.detail || "Server error");
+  dropZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropZone.classList.remove("drag-over");
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      input.files = e.dataTransfer.files;
+      handleFile(e.dataTransfer.files[0], dropZone, info, onSelect);
+    }
+  });
+}
 
-    renderMatchedTable(data);
-    $("#global-loader").classList.remove("show");
-    $("#step-upload").style.display  = "none";
-    $("#step-results").style.display = "block";
-    $("#step-indicator-1").classList.remove("active");
-    $("#step-indicator-1").classList.add("done");
-    $("#step-indicator-2").classList.add("active");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-
-  } catch (err) {
-    clearInterval(timer);
-    $("#global-loader").classList.remove("show");
-    showAlert($("#upload-error"), "error", `❌ Error: ${err.message}`);
-    $("#match-btn").disabled = false;
+function handleFile(file, dropZone, info, onSelect) {
+  onSelect(file);
+  dropZone.classList.add("has-file");
+  const content = dropZone.querySelector(".drop-content");
+  if (content) content.style.display = "none";
+  if (info) {
+    info.style.display = "block";
+    info.innerHTML = `✅ <strong>${escapeHtml(file.name)}</strong><br><small>(${(file.size / (1024 * 1024)).toFixed(2)} MB)</small>`;
   }
 }
 
-function renderMatchedTable(data) {
-  const tableBody = $("#results-table-body");
-  tableBody.innerHTML = "";
-
-  const rows = data.matched_table || [];
-  $("#summary-badge").textContent = `कुल प्रश्न: ${rows.length} | दोस्त का पेपर: ${data.questions_b_count > 0 ? "Series D मैच हुआ ✅" : "अपलोड नहीं था"}`;
-
-  rows.forEach(r => {
-    const tr = document.createElement("tr");
-
-    const ansBadge = r.correct_answer && r.correct_answer !== "?"
-      ? `<span class="answer-chip chip-correct">${r.correct_answer}</span>`
-      : `<span class="answer-chip chip-neutral">—</span>`;
-
-    const bMatchBadge = r.series_b_q_no && r.series_b_q_no !== "—"
-      ? `<strong style="color:var(--primary);font-size:1.05rem;">Q.${r.series_b_q_no}</strong>`
-      : `<span style="color:var(--text-muted);">—</span>`;
-
-    tr.innerHTML = `
-      <td style="text-align:center;font-weight:700;font-size:1.05rem;">
-        Q.${r.series_a_q_no}
-      </td>
-      <td class="q-preview">
-        ${escHtml(r.question)}
-      </td>
-      <td style="text-align:center;">
-        ${bMatchBadge}
-      </td>
-      <td style="text-align:center;">
-        ${ansBadge}
-      </td>
-    `;
-    tableBody.appendChild(tr);
-  });
-}
-
-function restart() {
-  paperAFile = null; paperBFile = null; keyFile = null;
-  ["paper-a-zone", "paper-b-zone", "key-zone"].forEach(id => {
-    const z = $(`#${id}`);
-    if (!z) return;
-    z.classList.remove("has-file");
-    const name = z.querySelector(".file-name");
-    if (name) name.textContent = "";
-  });
-  $$("input[type=file]").forEach(i => (i.value = ""));
-
-  $("#step-results").style.display = "none";
-  $("#step-upload").style.display  = "block";
-  $("#step-indicator-2").classList.remove("active");
-  $("#step-indicator-1").classList.remove("done");
-  $("#step-indicator-1").classList.add("active");
-  $("#match-btn").disabled = false;
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
-function escHtml(str) {
+function escapeHtml(str) {
   return String(str || "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -171,12 +62,168 @@ function escHtml(str) {
     .replace(/"/g, "&quot;");
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  setupUploadZone("paper-a-zone", "paper-a-input", f => { paperAFile = f; markZoneFile("paper-a-zone", f); });
-  setupUploadZone("paper-b-zone", "paper-b-input", f => { paperBFile = f; markZoneFile("paper-b-zone", f); });
-  setupUploadZone("key-zone",     "key-input",     f => { keyFile     = f; markZoneFile("key-zone", f); });
+async function startMatching() {
+  const errorBox = $("error-box");
+  const statusCard = $("status-card");
+  const statusTitle = $("status-title");
+  const statusDesc = $("status-desc");
+  const matchBtn = $("match-btn");
+  const resultsSection = $("results-section");
 
-  $("#match-btn")?.addEventListener("click", matchSeries);
-  $("#restart-btn")?.addEventListener("click", restart);
-  $("#print-btn")?.addEventListener("click", () => window.print());
+  errorBox.style.display = "none";
+  errorBox.textContent = "";
+
+  if (!fileA) {
+    errorBox.style.display = "block";
+    errorBox.textContent = "⚠️ कृपया कम से कम अपना पेपर (Series A) ज़रूर अपलोड करें।";
+    return;
+  }
+
+  matchBtn.disabled = true;
+  statusCard.style.display = "flex";
+  resultsSection.style.display = "none";
+
+  // Dynamic status updates
+  statusTitle.textContent = "📄 PDF को स्कैन किया जा रहा है...";
+  statusDesc.textContent = "AI मॉडल पेपर्स के प्रश्नों को हिंदी और अंग्रेजी में पढ़ रहा है...";
+
+  let timerSec = 0;
+  const timer = setInterval(() => {
+    timerSec += 3;
+    if (timerSec === 6) {
+      statusTitle.textContent = "🔍 प्रश्नों का विश्लेषण चालू है...";
+      statusDesc.textContent = "बड़ा पेपर है, प्रत्येक पेज के प्रश्नों को प्रोसेस किया जा रहा है...";
+    } else if (timerSec === 15) {
+      statusTitle.textContent = "🤖 दोनों पेपर्स की सीरीज का मिलान हो रहा है...";
+      statusDesc.textContent = "Series A और Series D के प्रश्नों को मैच किया जा रहा है...";
+    } else if (timerSec >= 30) {
+      statusTitle.textContent = `⏳ अंतिम सारणी तैयार हो रही है (${timerSec}s)...`;
+      statusDesc.textContent = "कृपया प्रतीक्षा करें, जल्द ही परिणाम सामने होंगे...";
+    }
+  }, 3000);
+
+  try {
+    const formData = new FormData();
+    formData.append("paper_a", fileA);
+    if (fileB) formData.append("paper_b", fileB);
+    if (fileKey) formData.append("answer_key", fileKey);
+
+    const res = await fetch("/api/match-series", {
+      method: "POST",
+      body: formData
+    });
+
+    clearInterval(timer);
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || `Server Error (${res.status})`);
+    }
+
+    const data = await res.json();
+    renderResults(data);
+
+    statusCard.style.display = "none";
+    resultsSection.style.display = "block";
+    resultsSection.scrollIntoView({ behavior: "smooth" });
+
+  } catch (err) {
+    clearInterval(timer);
+    statusCard.style.display = "none";
+    errorBox.style.display = "block";
+    errorBox.textContent = `❌ त्रुटि (Error): ${err.message}`;
+  } finally {
+    matchBtn.disabled = false;
+  }
+}
+
+function renderResults(data) {
+  const tbody = $("match-table-body");
+  tbody.innerHTML = "";
+
+  const rows = data.matched_table || [];
+
+  $("stat-total").textContent = data.total_questions || rows.length;
+  $("stat-matched").textContent = data.questions_b_count > 0 ? `${rows.length} (Series D)` : "Single Series";
+  $("stat-key").textContent = data.has_key ? "हाँ (Yes) ✅" : "नहीं (No)";
+
+  rows.forEach((r) => {
+    const tr = document.createElement("tr");
+
+    // Options formatting
+    let optsHtml = "";
+    if (r.options && typeof r.options === "object") {
+      optsHtml = `<div class="opts-preview">` + 
+        Object.entries(r.options).map(([k, v]) => `<span class="opt-pill"><strong>${k}:</strong> ${escapeHtml(v)}</span>`).join(" ") +
+        `</div>`;
+    }
+
+    // Answer badge
+    let ansHtml = "—";
+    if (r.correct_answer && r.correct_answer !== "?") {
+      ansHtml = `<span class="ans-badge">${escapeHtml(r.correct_answer)}</span>`;
+    }
+
+    tr.innerHTML = `
+      <td style="text-align:center; font-weight:700; font-size:1.05rem;">
+        Q.${escapeHtml(r.series_a_q_no)}
+      </td>
+      <td>
+        <div class="q-text">${escapeHtml(r.question)}</div>
+        ${optsHtml}
+      </td>
+      <td style="text-align:center; font-weight:700; color:var(--primary); font-size:1.1rem;">
+        ${r.series_b_q_no && r.series_b_q_no !== "—" ? `Q.${escapeHtml(r.series_b_q_no)}` : "—"}
+      </td>
+      <td style="text-align:center;">
+        ${ansHtml}
+      </td>
+      <td style="text-align:center; font-size:0.85rem; color:var(--text-muted);">
+        ${r.matched_by === "ai" ? "AI Matched" : "Direct"}
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// Setup CSV Download
+function setupDownloadCsv() {
+  const btn = $("download-csv-btn");
+  if (!btn) return;
+
+  btn.addEventListener("click", () => {
+    const table = $("match-table");
+    if (!table) return;
+
+    let csv = [];
+    const rows = table.querySelectorAll("tr");
+    for (let r of rows) {
+      const cols = r.querySelectorAll("th, td");
+      const rowData = [];
+      for (let c of cols) {
+        let text = c.innerText.replace(/"/g, '""').replace(/\n/g, ' ');
+        rowData.push(`"${text}"`);
+      }
+      csv.push(rowData.join(","));
+    }
+
+    const csvBlob = new Blob([csv.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(csvBlob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "Exam_Series_Match_Results.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+}
+
+// Initialise on load
+document.addEventListener("DOMContentLoaded", () => {
+  setupBox("drop-zone-a", "file-a", "file-info-a", (f) => { fileA = f; });
+  setupBox("drop-zone-b", "file-b", "file-info-b", (f) => { fileB = f; });
+  setupBox("drop-zone-key", "file-key", "file-info-key", (f) => { fileKey = f; });
+
+  $("match-btn")?.addEventListener("click", startMatching);
+  $("print-btn")?.addEventListener("click", () => window.print());
+  setupDownloadCsv();
 });
